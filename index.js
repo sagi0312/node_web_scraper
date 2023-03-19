@@ -1,33 +1,91 @@
 const PORT = 8000;
-const axios = require("axios");
-const cheerio = require("cheerio");
 const express = require("express");
-
+const puppeteer = require("puppeteer");
 const app = express();
-const url = "https://people.com/";
+const path = require("path");
+var cors = require("cors");
 
-async function scraping() {
-  try {
-    // Fetch HTML of the page we want to scrape
-    const { data } = await axios.get(url);
+app.use(cors());
+app.use(express.static("public"));
 
-    const $ = cheerio.load(data);
-    const articles = [];
-    $(".fc-item__title", data).each(function () {
-      //const title = $(this).text();
-      const innerUrl = $(this).find("a").attr("href");
-      articles.push(innerUrl);
-    });
-    return articles;
-  } catch (err) {
-    console.error(err);
-  }
-}
-
+/**
+ * The rest api for getting the heat map of the fcc progress.
+ */
 app.get("/api/scrape", async (req, res) => {
   try {
-    const scraped = await scraping();
-    return res.status(200).json(scraped);
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    console.log("The query parameter: ", req.query.name);
+    await page.goto("https://www.freecodecamp.org/" + req.query.name);
+
+    await page.waitForSelector(".react-calendar-heatmap").then(async () => {
+      console.log("page loaded");
+    });
+
+    const heatMap = await page.$(".col-sm-8.col-sm-offset-2.col-xs-12"); // declare a variable with an ElementHandle
+    const box = await heatMap.boundingBox(); // this method returns an array of geometric parameters of the element in pixels.
+    const x = box["x"]; // coordinate x
+    const y = box["y"]; // coordinate y
+    const w = box["width"]; // area width
+    const h = box["height"]; // area height
+    // take screenshot of the required area in puppeteer
+    await page.screenshot({
+      path: "./public/heatMap.png",
+      clip: { x: x, y: y, width: w, height: h },
+    });
+    await browser.close();
+    const options = {
+      root: path.join(__dirname, "public"),
+    };
+    res.sendFile("heatMap.png", options, (err) => {
+      if (err) {
+        next(err);
+      } else {
+        console.log("Heat Map Sent");
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({
+      err: err.toString(),
+    });
+  }
+});
+
+/**
+ * The rest api for getting the profile picture of the member.
+ */
+app.get("/api/profilePic", async (req, res) => {
+  try {
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    console.log("The query parameter: ", req.query.name);
+    await page.goto("https://www.freecodecamp.org/" + req.query.name);
+
+    await page.waitForSelector(".react-calendar-heatmap").then(async () => {
+      console.log("page loaded");
+    });
+    const heatMap = await page.$(".avatar-container.default-border"); // declare a variable with an ElementHandle
+    const box = await heatMap.boundingBox(); // this method returns an array of geometric parameters of the element in pixels.
+    const x = box["x"]; // coordinate x
+    const y = box["y"]; // coordinate y
+    const w = box["width"]; // area width
+    const h = box["height"]; // area height
+    // take screenshot of the required area in puppeteer
+    await page.screenshot({
+      path: "./public/profilePic.png",
+      clip: { x: x, y: y, width: w, height: h },
+    });
+    await browser.close();
+    const options = {
+      root: path.join(__dirname, "public"),
+    };
+    res.sendFile("profilePic.png", options, (err) => {
+      if (err) {
+        next(err);
+      } else {
+        console.log("Profile Pic Sent");
+      }
+    });
   } catch (err) {
     return res.status(500).json({
       err: err.toString(),
